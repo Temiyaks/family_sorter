@@ -145,23 +145,27 @@ if uploaded_file:
         printable_df = df[['NAME', 'GENDER', 'Family']]
         create_family_pdf(printable_df, pdf_path)
 
-    # ---- SUCCESS MESSAGE ----
-    st.success("✅ Family assignment completed!")
+    # ---- STATISTICS BEFORE GROUPING ----
+    st.subheader("📊 View Statistics Before Grouping")
+    for title, stat_df in stats_before.items():
+        st.markdown(f"**{title}**")
+        st.dataframe(stat_df)
 
-    # ---- DOWNLOADS ----
+    # ---- CSV DOWNLOAD ----
     with open(full_csv_path, "rb") as f_csv:
         st.download_button("⬇️ Download Grouped CSV", f_csv, file_name="grouped_families.csv", mime="text/csv")
 
-    with open(pdf_path, "rb") as f_pdf:
-        st.download_button("📥 Download Printable PDF", f_pdf, file_name="grouped_printable.pdf", mime="application/pdf")
+    # ---- STATISTICS AFTER GROUPING ----
+    st.subheader("📈 View Statistics After Grouping")
+    for title, stat_df in stats_after.items():
+        st.markdown(f"**{title}**")
+        st.dataframe(stat_df)
 
-    # ---- STATISTICS ----
-    with st.expander("📊 View Statistics Before Grouping"):
-        for title, stat_df in stats_before.items():
-            st.markdown(f"**{title}**")
-            st.dataframe(stat_df)
+    # ---- OPEN PDF IN BROWSER TAB ----
+    st.subheader("🖨️ View & Print PDF (No Explorer Needed)")
+    with open(pdf_path, "rb") as f:
+        base64_pdf = base64.b64encode(f.read()).decode('utf-8')
+        pdf_display = f'<iframe src="data:application/pdf;base64,{base64_pdf}" width="100%" height="600px" type="application/pdf"></iframe>'
+        st.markdown(pdf_display, unsafe_allow_html=True)
 
-    with st.expander("📈 View Statistics After Grouping"):
-        for title, stat_df in stats_after.items():
-            st.markdown(f"**{title}**")
-            st.dataframe(stat_df)
+    st.success("✅ Family assignment completed!")
