@@ -4,7 +4,7 @@ import re
 from collections import Counter
 from fpdf import FPDF
 import os
-
+import base64 
 # ---- PAGE SETUP ----
 st.set_page_config(page_title="FBS Family Sorter", layout="wide")
 
