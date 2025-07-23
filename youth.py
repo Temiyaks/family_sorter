@@ -1,16 +1,14 @@
-
 import streamlit as st
 import pandas as pd
 import re
 from collections import Counter
 from fpdf import FPDF
 import os
-import platform
-import subprocess
 
-# Streamlit page setup
+# ---- PAGE SETUP ----
 st.set_page_config(page_title="FBS Family Sorter", layout="wide")
 
+# ---- TITLE ----
 st.title("CCC Akoka Youth Family Restructuring Platform")
 st.markdown("""
 Welcome to the **Family Balancer Tool**  
@@ -22,8 +20,10 @@ Upload your member data as a CSV file. The system will sort members into **5 bal
 Let's get started!
 """)
 
+# ---- FILE UPLOAD ----
 uploaded_file = st.file_uploader(" Upload Member CSV File", type="csv")
 
+# ---- HELPERS ----
 @st.cache_data
 def age_range_key(age_str):
     if not isinstance(age_str, str):
@@ -80,88 +80,88 @@ def create_family_pdf(dataframe, save_path):
 
     pdf.output(save_path)
 
-def open_and_print(path):
-    if platform.system() == "Windows":
-        os.startfile(path)
-    elif platform.system() == "Darwin":  # macOS
-        subprocess.run(["open", path])
-    else:  # Linux
-        subprocess.run(["xdg-open", path])
-
+# ---- MAIN LOGIC ----
 if uploaded_file:
     df = pd.read_csv(uploaded_file, dtype={'PHONE': str})
 
-    # Clean and prepare before grouping
-    inactive_mask = df['ACTIVITY'].str.upper() == 'INACTIVE'
-    df.loc[inactive_mask, 'GENDER'] = df.loc[inactive_mask, 'GENDER'].fillna('UNKNOWN').str.upper()
-    df.loc[inactive_mask, 'AGE_RANGE'] = df.loc[inactive_mask, 'AGE_RANGE'].fillna('UNKNOWN')
-    df['GENDER'] = df['GENDER'].str.upper()
-    df['NAME'] = df['NAME'].combine_first(df.index.to_series().apply(lambda i: f"Unknown_{i}"))
-    df = df.dropna(subset=['AGE_RANGE'])
-    unique_age_ranges = sorted(df['AGE_RANGE'].unique(), key=age_range_key)
-    if 'UNKNOWN' not in unique_age_ranges:
-        unique_age_ranges.append('UNKNOWN')
-    df['AGE_RANGE'] = pd.Categorical(df['AGE_RANGE'], categories=unique_age_ranges, ordered=True)
+    with st.spinner("🔄 Processing and assigning families..."):
+        inactive_mask = df['ACTIVITY'].str.upper() == 'INACTIVE'
+        df.loc[inactive_mask, 'GENDER'] = df.loc[inactive_mask, 'GENDER'].fillna('UNKNOWN').str.upper()
+        df.loc[inactive_mask, 'AGE_RANGE'] = df.loc[inactive_mask, 'AGE_RANGE'].fillna('UNKNOWN')
 
-    stats_before = get_stats(df)
+        df['GENDER'] = df['GENDER'].str.upper()
+        df['NAME'] = df['NAME'].combine_first(df.index.to_series().apply(lambda i: f"Unknown_{i}"))
 
-    st.subheader("📊 View Statistics Before Grouping")
-    for title, stat_df in stats_before.items():
-        st.markdown(f"**{title}**")
-        st.dataframe(stat_df)
+        df = df.dropna(subset=['AGE_RANGE'])
+        unique_age_ranges = sorted(df['AGE_RANGE'].unique(), key=age_range_key)
+        if 'UNKNOWN' not in unique_age_ranges:
+            unique_age_ranges.append('UNKNOWN')
+        df['AGE_RANGE'] = pd.Categorical(df['AGE_RANGE'], categories=unique_age_ranges, ordered=True)
 
-    # Grouping
-    num_families = 5
-    df['Family'] = None
-    all_activity_types = df['ACTIVITY'].dropna().unique().tolist()
-    grouped = df.groupby(['GENDER', 'AGE_RANGE', 'ACTIVITY'])
+        stats_before = get_stats(df)
 
-    family_sizes = Counter({f'Family {i}': 0 for i in range(1, num_families + 1)})
-    activity_count = {
-        f'Family {i}': {atype: 0 for atype in all_activity_types}
-        for i in range(1, num_families + 1)
-    }
+        # FAMILY ASSIGNMENT
+        num_families = 5
+        df['Family'] = None
+        all_activity_types = df['ACTIVITY'].dropna().unique().tolist()
+        grouped = df.groupby(['GENDER', 'AGE_RANGE', 'ACTIVITY'])
 
-    total_members = len(df)
-    base_size = total_members // num_families
-    max_size = base_size + (1 if total_members % num_families != 0 else 0)
+        family_sizes = Counter({f'Family {i}': 0 for i in range(1, num_families + 1)})
+        activity_count = {
+            f'Family {i}': {atype: 0 for atype in all_activity_types}
+            for i in range(1, num_families + 1)
+        }
 
-    def pick_family(family_sizes, activity_count, activity_type):
-        min_size = min(family_sizes.values())
-        candidates = [fam for fam, size in family_sizes.items() if size < max_size and size == min_size]
-        if not candidates:
-            candidates = sorted(family_sizes, key=lambda f: family_sizes[f])
-        candidates = sorted(candidates, key=lambda fam: activity_count[fam].get(activity_type, 0))
-        return candidates[0]
+        total_members = len(df)
+        base_size = total_members // num_families
+        max_size = base_size + (1 if total_members % num_families != 0 else 0)
 
-    for group_keys, group_df in grouped:
-        indices = group_df.index.tolist()
-        gender, age_range, activity = group_keys
-        for i in range(len(indices)):
-            fam = pick_family(family_sizes, activity_count, activity)
-            df.at[indices[i], 'Family'] = fam
-            family_sizes[fam] += 1
-            activity_count[fam][activity] += 1
+        def pick_family(family_sizes, activity_count, activity_type):
+            min_size = min(family_sizes.values())
+            candidates = [fam for fam, size in family_sizes.items() if size < max_size and size == min_size]
+            if not candidates:
+                candidates = sorted(family_sizes, key=lambda f: family_sizes[f])
+            candidates = sorted(candidates, key=lambda fam: activity_count[fam].get(activity_type, 0))
+            return candidates[0]
 
-    stats_after = get_stats(df)
+        for group_keys, group_df in grouped:
+            indices = group_df.index.tolist()
+            gender, age_range, activity = group_keys
+            for i in range(len(indices)):
+                fam = pick_family(family_sizes, activity_count, activity)
+                df.at[indices[i], 'Family'] = fam
+                family_sizes[fam] += 1
+                activity_count[fam][activity] += 1
 
-    # Save files
-    save_dir = "C:/Users/temit/Documents/AKOKAYOUTH/"
-    os.makedirs(save_dir, exist_ok=True)
-    full_csv_path = os.path.join(save_dir, "grouped_full.csv")
-    pdf_path = os.path.join(save_dir, "grouped_printable.pdf")
-    df.to_csv(full_csv_path, index=False)
-    printable_df = df[['NAME', 'GENDER', 'Family']]
-    create_family_pdf(printable_df, pdf_path)
+        df['AGE_RANGE'] = pd.Categorical(df['AGE_RANGE'], categories=unique_age_ranges, ordered=True)
 
+        stats_after = get_stats(df)
+
+        # Save CSV and PDF to temporary local paths (for download only)
+        full_csv_path = "grouped_full.csv"
+        pdf_path = "grouped_printable.pdf"
+
+        df.to_csv(full_csv_path, index=False)
+        printable_df = df[['NAME', 'GENDER', 'Family']]
+        create_family_pdf(printable_df, pdf_path)
+
+    # ---- SUCCESS MESSAGE ----
     st.success("✅ Family assignment completed!")
 
-    st.markdown(f"📂 Full CSV saved to: `{full_csv_path}`")
+    # ---- DOWNLOADS ----
+    with open(full_csv_path, "rb") as f_csv:
+        st.download_button("⬇️ Download Grouped CSV", f_csv, file_name="grouped_families.csv", mime="text/csv")
 
-    st.subheader("📈 View Statistics After Grouping")
-    for title, stat_df in stats_after.items():
-        st.markdown(f"**{title}**")
-        st.dataframe(stat_df)
+    with open(pdf_path, "rb") as f_pdf:
+        st.download_button("📥 Download Printable PDF", f_pdf, file_name="grouped_printable.pdf", mime="application/pdf")
 
-    if st.button("🖨️ Open & Print PDF"):
-        open_and_print(pdf_path)
+    # ---- STATISTICS ----
+    with st.expander("📊 View Statistics Before Grouping"):
+        for title, stat_df in stats_before.items():
+            st.markdown(f"**{title}**")
+            st.dataframe(stat_df)
+
+    with st.expander("📈 View Statistics After Grouping"):
+        for title, stat_df in stats_after.items():
+            st.markdown(f"**{title}**")
+            st.dataframe(stat_df)
