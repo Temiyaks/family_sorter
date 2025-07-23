@@ -4,7 +4,8 @@ import re
 from collections import Counter
 from fpdf import FPDF
 import os
-import base64 
+import base64
+
 # ---- PAGE SETUP ----
 st.set_page_config(page_title="FBS Family Sorter", layout="wide")
 
@@ -161,11 +162,15 @@ if uploaded_file:
         st.markdown(f"**{title}**")
         st.dataframe(stat_df)
 
-    # ---- OPEN PDF IN BROWSER TAB ----
-    st.subheader("🖨️ View & Print PDF (No Explorer Needed)")
-    with open(pdf_path, "rb") as f:
-        base64_pdf = base64.b64encode(f.read()).decode('utf-8')
-        pdf_display = f'<iframe src="data:application/pdf;base64,{base64_pdf}" width="100%" height="600px" type="application/pdf"></iframe>'
-        st.markdown(pdf_display, unsafe_allow_html=True)
+    # ---- PDF DOWNLOAD & INSTRUCTION ----
+    st.subheader("🖨️ Download PDF to View & Print")
+    with open(pdf_path, "rb") as f_pdf:
+        st.download_button(
+            label="⬇️ Download PDF Report",
+            data=f_pdf,
+            file_name="grouped_families.pdf",
+            mime="application/pdf"
+        )
+    st.markdown("👉 After downloading, open the PDF directly from your browser's downloads bar and press **Ctrl+P** to print.")
 
     st.success("✅ Family assignment completed!")
