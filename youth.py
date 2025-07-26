@@ -7,7 +7,7 @@ from fpdf import FPDF
 import matplotlib.pyplot as plt
 
 # 👇 Show the logo
-st.image("CCCAkokaLogo.png", width=150)
+st.image("CCCAkokaLogo.PNG", width=150)
 
 # ---- PAGE SETUP ----
 st.set_page_config(page_title="Family Restructuring", layout="wide")
