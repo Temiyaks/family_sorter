@@ -1,16 +1,18 @@
 import streamlit as st
 import pandas as pd
 import re
-import random
 from collections import Counter
 from fpdf import FPDF
-import matplotlib.pyplot as plt
+import os
+import base64
+
 
 # 👇 Show the logo
 st.image("CCCAkokaLogo.png", width=150)
 
+
 # ---- PAGE SETUP ----
-st.set_page_config(page_title="Family Restructuring", layout="wide")
+st.set_page_config(page_title="FBS Family Sorter", layout="wide")
 
 # ---- TITLE ----
 st.title("CCC Akoka Youth Family Restructuring Platform")
@@ -87,8 +89,6 @@ def create_family_pdf(dataframe, save_path):
 # ---- MAIN LOGIC ----
 if uploaded_file:
     df = pd.read_csv(uploaded_file, dtype={'PHONE': str})
-    # 👉 Add this shuffle line after cleaning and before family assignment
-    df = df.sample(frac=1, random_state=None).reset_index(drop=True)
 
     with st.spinner("🔄 Processing and assigning families..."):
         inactive_mask = df['ACTIVITY'].str.upper() == 'INACTIVE'
@@ -128,11 +128,11 @@ if uploaded_file:
             if not candidates:
                 candidates = sorted(family_sizes, key=lambda f: family_sizes[f])
             candidates = sorted(candidates, key=lambda fam: activity_count[fam].get(activity_type, 0))
-            return random.choice(candidates)
+            return candidates[0]
 
         for group_keys, group_df in grouped:
+            indices = group_df.index.tolist()
             gender, age_range, activity = group_keys
-            indices = group_df.sample(frac=1, random_state=None).index.tolist()  # Randomize
             for i in range(len(indices)):
                 fam = pick_family(family_sizes, activity_count, activity)
                 df.at[indices[i], 'Family'] = fam
@@ -143,12 +143,7 @@ if uploaded_file:
 
         stats_after = get_stats(df)
 
-
-        
-
-
-
-        # Save CSV and PDF to temporary local paths
+        # Save CSV and PDF to temporary local paths (for download only)
         full_csv_path = "grouped_full.csv"
         pdf_path = "grouped_printable.pdf"
 
@@ -168,21 +163,6 @@ if uploaded_file:
 
     # ---- STATISTICS AFTER GROUPING ----
     st.subheader("📈 View Statistics After Grouping")
-
-    # ---- FAMILY SIZE BAR CHART ----
-    st.subheader("🏠 Family Sizes Bar Chart")
-
-    family_sizes = stats_after['Family Sizes']
-    fig, ax = plt.subplots()
-    family_sizes.plot(kind='bar', legend=False, ax=ax, color='skyblue')
-    ax.set_title("Number of Members per Family")
-    ax.set_ylabel("Number of Members")
-    ax.set_xlabel("Family")
-    st.pyplot(fig)
-
-
-
-
     for title, stat_df in stats_after.items():
         st.markdown(f"**{title}**")
         st.dataframe(stat_df)
