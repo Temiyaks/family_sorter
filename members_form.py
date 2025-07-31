@@ -15,17 +15,17 @@ st.title("📝 Youth Family Form")
 
 
 # Read credentials from Streamlit secrets
-creds_dict = st.secrets["google_service_account"]
+creds_dict = dict(st.secrets["google_service_account"])
 
 # Save credentials as a dict
-creds_json = json.loads(json.dumps(creds_dict))
+# creds_json = json.loads(json.dumps(creds_dict))
 
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
 creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_json, scope)
 client = gspread.authorize(creds)
 
 # Open Google Sheet
-sheet = client.open_by_url("https://docs.google.com/spreadsheets/d/your-sheet-id")
+sheet = client.open_by_url("https://docs.google.com/spreadsheets/d/1uM4EbZIGlAyhefZwHG39XdsGt_OXiwP8fc0vB8vKwxU/edit?gid=0#gid=0")
 worksheet = sheet.sheet1
 
 
