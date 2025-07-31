@@ -29,7 +29,6 @@ if not st.session_state.authenticated:
     if login_button:
         if username == USERNAME and password == PASSWORD:
             st.session_state.authenticated = True
-            st.experimental_rerun()  # Rerun to show main app after login
         else:
             st.error("❌ Invalid username or password.")
     st.stop()  # Stop here if not authenticated
