@@ -20,7 +20,7 @@ with st.form("login_form"):
 
 if not login_button or username != USERNAME or password != PASSWORD:
     st.stop()
-    
+
 
 st.success("✅ Logged in successfully!")
 
@@ -116,11 +116,29 @@ for idx, row in pending_df.iterrows():
     }
     assigned_rows.append(assigned_row)
 
-# === Confirm Assignment ===
-if st.button("✅ Assign Pending to Families"):
-    # Append to Master
-    for row in assigned_rows:
-        master_ws.append_row(list(row.values()))
+
+if 'authenticated' not in st.session_state:
+    st.session_state.authenticated = False
+
+if not st.session_state.authenticated:
+    # Show login form
+    # On successful login:
+    st.session_state.authenticated = True
+    st.stop()  # Prevents rerun after setting authenticated
+
+
+if st.session_state.authenticated:
+    if st.button("✅ Assign Pending to Families"):
+        for row in assigned_rows:
+            master_ws.append_row(list(row.values()))
+        st.success("Assignment complete.")
+
+
+# # === Confirm Assignment ===
+# if st.button("✅ Assign Pending to Families"):
+#     # Append to Master
+#     for row in assigned_rows:
+#         master_ws.append_row(list(row.values()))
     
     # Clear Pending Sheet
     pending_ws.clear()
