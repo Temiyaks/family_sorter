@@ -2,43 +2,54 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime
 import os
-
-
+import gspread
+from oauth2client.service_account import ServiceAccountCredentials
 
 # 👇 Show the logo
 st.image("CCCAkokaLogo.PNG", width=150)
 
-st.set_page_config(page_title="Youth Family Assignment Form", layout="centered")
+st.set_page_config(page_title="Youth Family Form", layout="centered")
 
-st.title("📝 Youth Family Assignment Form")
+st.title("📝 Youth Family Form")
 
-# File paths
-MASTER_DATA_PATH = "master_data.csv"
-PENDING_DATA_PATH = "pending_data.csv"
+# === Google Sheets Setup ===
+scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+creds = ServiceAccountCredentials.from_json_keyfile_name("service_account.json", scope)
+client = gspread.authorize(creds)
 
-# Load or create master_data.csv
-if os.path.exists(MASTER_DATA_PATH):
-    master_df = pd.read_csv(MASTER_DATA_PATH, dtype={"PHONE": str})
-else:
+# === Google Sheet Configuration ===
+SHEET_NAME = "Youth Family Assignment"
+WORKSHEET_NAME = "Pending"
+try:
+    sheet = client.open(SHEET_NAME)
+except gspread.SpreadsheetNotFound:
+    st.error(f"Google Sheet '{SHEET_NAME}' not found. Please create it first and share with the service account email.")
+    st.stop()
+
+worksheet = sheet.worksheet(WORKSHEET_NAME)
+
+# Load existing master data from another worksheet
+try:
+    master_df = pd.DataFrame(sheet.worksheet("Master").get_all_records())
+except:
     master_df = pd.DataFrame(columns=["NAME", "GENDER", "AGE_RANGE", "PHONE", "FAMILY"])
 
-# Load or create pending_data.csv
-if os.path.exists(PENDING_DATA_PATH):
-    pending_df = pd.read_csv(PENDING_DATA_PATH, dtype={"PHONE": str})
-else:
+# Load existing pending data
+try:
+    pending_df = pd.DataFrame(worksheet.get_all_records())
+except:
     pending_df = pd.DataFrame(columns=["NAME", "GENDER", "AGE_RANGE", "PHONE", "TIMESTAMP"])
 
-# Form
+# === Streamlit Form ===
 with st.form("registration_form"):
     name = st.text_input("Full Name").strip().title()
     gender = st.selectbox("Gender", ["MALE", "FEMALE"])
     age_range = st.selectbox("Age Range", ["15-19", "20-24", "25-29", "30-34", "35-39", "40-44", "45-49", "50-54"])
     phone = st.text_input("Phone Number (e.g., 08123456789)").strip()
-
     submit = st.form_submit_button("Submit")
 
     if submit:
-        # Standardize phone number by ensuring it starts with zero
+        # === Standardize phone ===
         if phone.startswith("0"):
             standardized_phone = phone
         elif phone.startswith("234") and len(phone) == 13:
@@ -48,43 +59,33 @@ with st.form("registration_form"):
         else:
             standardized_phone = phone  # fallback
 
-        # Capitalize inputs
         entry = {
             "NAME": name,
             "GENDER": gender.upper(),
             "AGE_RANGE": age_range,
-            "PHONE": standardized_phone
+            "PHONE": standardized_phone,
+            "TIMESTAMP": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         }
 
-
-        # if standardized_phone in master_df["PHONE"].values:
-        #     member_name = master_df.loc[master_df["PHONE"] == standardized_phone, "Name"].values[0]
-        #     family_name = master_df.loc[master_df["PHONE"] == standardized_phone, "FAMILY"].values[0]
-        #     st.error(f"⚠️ {member_name} is already registered and assigned to **{family_name}**. Please do not register again.")
-
-
-        # Validate against master data
+        # === Check for duplicates in master sheet ===
         if standardized_phone in master_df["PHONE"].values:
             assigned_family = master_df.loc[master_df["PHONE"] == standardized_phone, "FAMILY"].values[0]
-            member_name = master_df.loc[master_df["PHONE"] == standardized_phone, "Name"].values[0]
+            member_name = master_df.loc[master_df["PHONE"] == standardized_phone, "NAME"].values[0]
             st.error(
-                f"⚠️  **{member_name}** is already registered and assigned to **{assigned_family}**.\n\n"
+                f"⚠️ **{member_name}** is already registered and assigned to **{assigned_family}**.\n\n"
                 "Please do not register again."
             )
 
-        # Validate against pending data
+        # === Check for duplicates in pending sheet ===
         elif standardized_phone in pending_df["PHONE"].values:
             pending_name = pending_df.loc[pending_df["PHONE"] == standardized_phone, "NAME"].values[0]
             submission_time = pending_df.loc[pending_df["PHONE"] == standardized_phone, "TIMESTAMP"].values[0]
             st.warning(
-                f"⏳ **{pending_name}** was already submitted on **{submission_time}**.\n\n"
-                "Your registration is being reviewed and will be assigned to a family group soon. \n\n"
-                 "No need to submit again — we’ll notify you once it’s complete!."
+                f"⏳ **{pending_name}** already submitted on **{submission_time}**.\n\n"
+                "No need to submit again — we’ll notify you once assigned."
             )
 
-        # Proceed to save
+        # === Save to Google Sheet ===
         else:
-            entry["TIMESTAMP"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            pending_df = pd.concat([pending_df, pd.DataFrame([entry])], ignore_index=True)
-            pending_df.to_csv(PENDING_DATA_PATH, index=False)
+            worksheet.append_row(list(entry.values()))
             st.success("✅ Your registration was successful and is pending approval.")
