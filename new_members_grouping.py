@@ -120,25 +120,26 @@ for idx, row in pending_df.iterrows():
 if 'authenticated' not in st.session_state:
     st.session_state.authenticated = False
 
+# if not st.session_state.authenticated:
+#     # Show login form
+#     # On successful login:
+#     st.session_state.authenticated = True
+#     st.stop()  # Prevents rerun after setting authenticated
+
+
 if not st.session_state.authenticated:
-    # Show login form
-    # On successful login:
-    st.session_state.authenticated = True
-    st.stop()  # Prevents rerun after setting authenticated
+    if st.session_state.authenticated:
+        if st.button("✅ Assign Pending to Families"):
+            for row in assigned_rows:
+                master_ws.append_row(list(row.values()))
+            st.success("Assignment complete.")
 
 
-if st.session_state.authenticated:
-    if st.button("✅ Assign Pending to Families"):
-        for row in assigned_rows:
-            master_ws.append_row(list(row.values()))
-        st.success("Assignment complete.")
-
-
-# # === Confirm Assignment ===
-# if st.button("✅ Assign Pending to Families"):
-#     # Append to Master
-#     for row in assigned_rows:
-#         master_ws.append_row(list(row.values()))
+# === Confirm Assignment ===
+if st.button("✅ Assign Pending to Families"):
+    # Append to Master
+    for row in assigned_rows:
+        master_ws.append_row(list(row.values()))
     
     # Clear Pending Sheet
     pending_ws.clear()
