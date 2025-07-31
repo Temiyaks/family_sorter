@@ -3,6 +3,7 @@ import pandas as pd
 from datetime import datetime
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
+import json
 
 # 👇 Show the logo
 st.image("CCCAkokaLogo.PNG", width=150)
@@ -10,10 +11,23 @@ st.image("CCCAkokaLogo.PNG", width=150)
 st.set_page_config(page_title="Youth Family Form", layout="centered")
 st.title("📝 Youth Family Form")
 
-# === Google Sheets Setup ===
+
+
+
+# Read credentials from Streamlit secrets
+creds_dict = st.secrets["google_service_account"]
+
+# Save credentials as a dict
+creds_json = json.loads(json.dumps(creds_dict))
+
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-creds = ServiceAccountCredentials.from_json_keyfile_name("service_account.json", scope)
+creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_json, scope)
 client = gspread.authorize(creds)
+
+# Open Google Sheet
+sheet = client.open_by_url("https://docs.google.com/spreadsheets/d/your-sheet-id")
+worksheet = sheet.sheet1
+
 
 # === Google Sheet Configuration ===
 SHEET_NAME = "Youth Family Assignment"
