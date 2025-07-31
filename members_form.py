@@ -3,6 +3,11 @@ import pandas as pd
 from datetime import datetime
 import os
 
+
+
+# 👇 Show the logo
+st.image("CCCAkokaLogo.PNG", width=150)
+
 st.set_page_config(page_title="Youth Family Assignment Form", layout="centered")
 
 st.title("📝 Youth Family Assignment Form")
@@ -80,6 +85,6 @@ with st.form("registration_form"):
         # Proceed to save
         else:
             entry["TIMESTAMP"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            pending_df = pending_df.append(entry, ignore_index=True)
+            pending_df = pd.concat([pending_df, pd.DataFrame([entry])], ignore_index=True)
             pending_df.to_csv(PENDING_DATA_PATH, index=False)
             st.success("✅ Your registration was successful and is pending approval.")
