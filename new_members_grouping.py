@@ -3,9 +3,6 @@ import pandas as pd
 import gspread
 from datetime import datetime
 from oauth2client.service_account import ServiceAccountCredentials
-import json
-import random
-
 
 st.set_page_config(page_title="Assign Families", layout="centered")
 st.title("Assign new members to Families")
@@ -23,6 +20,7 @@ with st.form("login_form"):
 
 if not login_button or username != USERNAME or password != PASSWORD:
     st.stop()
+    
 
 st.success("✅ Logged in successfully!")
 
@@ -63,80 +61,72 @@ client = gspread.authorize(creds)
 sheet = client.open_by_url("https://docs.google.com/spreadsheets/d/1uM4EbZIGlAyhefZwHG39XdsGt_OXiwP8fc0vB8vKwxU/edit?gid=0#gid=0")
 worksheet = sheet.sheet1
 
-
+# === Sheet Config ===
 SHEET_NAME = "Youth Family Assignment"
-MASTER_SHEET = "Master"
-PENDING_SHEET = "Pending"
+MASTER_WS = "Master"
+PENDING_WS = "Pending"
 
 try:
     sheet = client.open(SHEET_NAME)
-except gspread.SpreadsheetNotFound:
-    st.error("❌ Could not find sheet.")
+    master_ws = sheet.worksheet(MASTER_WS)
+    pending_ws = sheet.worksheet(PENDING_WS)
+except Exception as e:
+    st.error(f"Could not open sheet: {e}")
     st.stop()
 
-master_ws = sheet.worksheet(MASTER_SHEET)
-pending_ws = sheet.worksheet(PENDING_SHEET)
-
-# === LOAD DATA ===
+# === Load Master Data ===
 master_df = pd.DataFrame(master_ws.get_all_records())
-pending_df = pd.DataFrame(pending_ws.get_all_records())
+if not master_df.empty:
+    master_df.rename(columns=lambda x: x.strip().upper(), inplace=True)
+else:
+    master_df = pd.DataFrame(columns=["NAME", "GENDER", "AGE_RANGE", "PHONE", "FAMILY"])
 
-# Ensure consistent column names
-master_df.rename(columns=lambda x: x.strip().upper(), inplace=True)
+# === Load Pending Data ===
+pending_df = pd.DataFrame(pending_ws.get_all_records())
+if pending_df.empty:
+    st.success("✅ No pending entries to assign.")
+    st.stop()
 pending_df.rename(columns=lambda x: x.strip().upper(), inplace=True)
 
-# Standardize phone numbers
-master_df["PHONE"] = master_df["PHONE"].astype(str).apply(lambda x: "0" + x[-10:] if x.isdigit() and len(x) >= 10 else x)
-pending_df["PHONE"] = pending_df["PHONE"].astype(str).apply(lambda x: "0" + x[-10:] if x.isdigit() and len(x) >= 10 else x)
-
-# === EXIT IF NO PENDING USERS ===
-if pending_df.empty:
-    st.info("✅ No pending registrations to assign.")
+# === Determine Existing Families and Their Counts ===
+if "FAMILY" not in master_df.columns:
+    st.error("Master data must contain 'FAMILY' column.")
     st.stop()
 
-# === EXISTING FAMILIES ===
-existing_families = master_df["FAMILY"].unique().tolist()
+family_list = master_df["FAMILY"].dropna().unique().tolist()
+family_counts = {family: len(master_df[master_df["FAMILY"] == family]) for family in family_list}
 
-# === FAMILY LOAD ===
-family_counts = master_df["FAMILY"].value_counts().to_dict()
-for fam in existing_families:
-    family_counts.setdefault(fam, 0)
+# === Assign People ===
+assigned_rows = []
+for idx, row in pending_df.iterrows():
+    gender = row["GENDER"]
+    age_range = row["AGE_RANGE"]
+    
+    # Find family with the least count
+    target_family = min(family_counts, key=family_counts.get)
+    family_counts[target_family] += 1  # Increment count for balancing
 
-# === SHUFFLE PENDING FOR VARIETY ===
-pending_df = pending_df.sample(frac=1, random_state=random.randint(1, 10000)).reset_index(drop=True)
-
-# === ASSIGNMENT LOGIC ===
-new_entries = []
-
-for _, row in pending_df.iterrows():
-    gender = row["GENDER"].upper()
-    age = row["AGE_RANGE"]
-
-    # Find families with lowest count
-    least_loaded = sorted(family_counts.items(), key=lambda x: x[1])[0][0]
-
-    new_entries.append({
+    assigned_row = {
         "NAME": row["NAME"],
         "GENDER": gender,
-        "AGE_RANGE": age,
-        "PHONE": f'0{str(row["PHONE"])[-10:]}' if str(row["PHONE"]).isdigit() else row["PHONE"],
-        "FAMILY": least_loaded,
+        "AGE_RANGE": age_range,
+        "PHONE": str(row["PHONE"]),
+        "FAMILY": target_family,
         "TIMESTAMP": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    })
+    }
+    assigned_rows.append(assigned_row)
 
-    # Update count
-    family_counts[least_loaded] += 1
+# === Confirm Assignment ===
+if st.button("✅ Assign Pending to Families"):
+    # Append to Master
+    for row in assigned_rows:
+        master_ws.append_row(list(row.values()))
+    
+    # Clear Pending Sheet
+    pending_ws.clear()
+    pending_ws.append_row(["NAME", "GENDER", "AGE_RANGE", "PHONE", "TIMESTAMP"])
+    
+    st.success(f"✅ {len(assigned_rows)} members have been assigned to families and added to the master sheet.")
+    st.info("Old entries in the master have no timestamp. Newly assigned members now include a timestamp.")
+    
 
-# === WRITE TO MASTER SHEET ===
-for entry in new_entries:
-    master_ws.append_row(list(entry.values()))
-
-# === CLEAR PENDING SHEET ===
-pending_ws.clear()
-pending_ws.append_row(["NAME", "GENDER", "AGE_RANGE", "PHONE", "TIMESTAMP"])
-
-# === CONFIRMATION ===
-st.success("🎉 All pending members have been assigned to families!")
-
-# === DISPLAY NEWLY ASSIGNED MEMBERS ===
-st.markdown("### 👥 Newly Assigned Members")
