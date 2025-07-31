@@ -21,7 +21,7 @@ creds_dict = dict(st.secrets["google_service_account"])
 # creds_json = json.loads(json.dumps(creds_dict))
 
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_json, scope)
+creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
 client = gspread.authorize(creds)
 
 # Open Google Sheet
