@@ -23,10 +23,21 @@ Ready to create new connections? Hit the button below to get started!
 """)
 
 
-# === Google Sheets Setup ===
+
+creds_dict = dict(st.secrets["google_service_account"])
+
+# Save credentials as a dict
+# creds_json = json.loads(json.dumps(creds_dict))
+
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-creds = ServiceAccountCredentials.from_json_keyfile_dict(st.secrets["google_service_account"], scope)
+creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
 client = gspread.authorize(creds)
+
+
+# # === Google Sheets Setup ===
+# scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+# creds = ServiceAccountCredentials.from_json_keyfile_dict(st.secrets["google_service_account"], scope)
+# client = gspread.authorize(creds)
 
 
 # Open Google Sheet
@@ -103,4 +114,3 @@ if st.button("✅ Assign Pending to Families"):
     st.dataframe(pd.DataFrame(assigned_rows))
 
 
-    
