@@ -5,5 +5,6 @@ numpy
 matplotlib
 gspread
 oauth2client
+rapidfuzz
 
 
