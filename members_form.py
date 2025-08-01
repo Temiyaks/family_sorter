@@ -3,11 +3,11 @@ import pandas as pd
 from datetime import datetime
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
-from rapidfuzz import fuzz  # for fuzzy matching
+from rapidfuzz import fuzz
 
 # === CONFIGURE FORM ACCESS WINDOW ===
-start_date = datetime(2025, 8, 1)  # form start date
-access_days = 5                   # number of days form stays open
+start_date = datetime(2025, 8, 1)  # Form start date
+access_days = 5                    # Duration (in days) the form stays open
 end_date = start_date + pd.Timedelta(days=access_days)
 today = datetime.now()
 
@@ -70,16 +70,15 @@ except Exception as e:
 pending_df.rename(columns=lambda x: x.strip().upper(), inplace=True)
 pending_df["PHONE"] = pending_df["PHONE"].astype(str).apply(lambda x: "0" + x[-10:] if len(x) >= 10 else x)
 
-# Initialize session state variable
+# === SESSION STATE ===
 if "confirmed" not in st.session_state:
     st.session_state.confirmed = False
 
 if "entry" not in st.session_state:
     st.session_state.entry = None
 
-# === FORM UI ===
+# === FORM SECTION ===
 with st.form("registration_form"):
-    # Show inputs only if not confirmed
     if not st.session_state.confirmed:
         name = st.text_input("Full Name").strip().title()
         gender = st.selectbox("Gender", ["MALE", "FEMALE"])
@@ -95,7 +94,7 @@ with st.form("registration_form"):
                 st.error("Phone Number is required.")
                 st.stop()
 
-            # Standardize phone number
+            # === PHONE CLEANUP ===
             if phone.startswith("0"):
                 standardized_phone = phone
             elif phone.startswith("234") and len(phone) == 13:
@@ -106,10 +105,10 @@ with st.form("registration_form"):
                 standardized_phone = phone
 
             if not (standardized_phone.startswith("0") and len(standardized_phone) == 11 and standardized_phone.isdigit()):
-                st.error("Phone number must start with 0 and be exactly 11 digits long (e.g., 08123456789).")
+                st.error("Phone number must start with 0 and be exactly 11 digits long.")
                 st.stop()
 
-            # Save entry to session
+            # Store form in session state
             st.session_state.entry = {
                 "NAME": name,
                 "GENDER": gender.upper(),
@@ -117,28 +116,25 @@ with st.form("registration_form"):
                 "PHONE": standardized_phone,
                 "TIMESTAMP": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             }
-
             st.session_state.confirmed = True
-            st.experimental_rerun()
 
-    else:
-        # Show confirmation details
-        entry = st.session_state.entry
-        st.markdown("### ✅ Please confirm your details before final submission:")
-        st.info(f"""
-        **Name:** {entry['NAME']}  
-        **Gender:** {entry['GENDER']}  
-        **Age Range:** {entry['AGE_RANGE']}  
-        **Phone:** {entry['PHONE']}
-        """)
-        confirm_submit = st.form_submit_button("✅ Confirm and Submit")
-        cancel = st.form_submit_button("❌ Cancel and Edit")
+# === CONFIRMATION STEP ===
+if st.session_state.confirmed and st.session_state.entry:
+    entry = st.session_state.entry
+    st.markdown("### ✅ Please confirm your details before submission:")
+    st.info(f"""
+    **Name:** {entry['NAME']}  
+    **Gender:** {entry['GENDER']}  
+    **Age Range:** {entry['AGE_RANGE']}  
+    **Phone:** {entry['PHONE']}
+    """)
 
-        if confirm_submit:
-            # Duplicate check threshold
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("✅ Confirm and Submit"):
             FUZZY_MATCH_THRESHOLD = 70
 
-            # Check duplicates in master
+            # === Check against Master ===
             for _, row in master_df.iterrows():
                 name_score = fuzz.token_sort_ratio(entry["NAME"], row["NAME"])
                 if name_score >= FUZZY_MATCH_THRESHOLD or entry["PHONE"] == row["PHONE"]:
@@ -148,9 +144,9 @@ with st.form("registration_form"):
                     )
                     st.session_state.confirmed = False
                     st.session_state.entry = None
-                    st.experimental_rerun()
+                    st.stop()
 
-            # Check duplicates in pending
+            # === Check against Pending ===
             for _, row in pending_df.iterrows():
                 name_score = fuzz.token_sort_ratio(entry["NAME"], row["NAME"])
                 if name_score >= FUZZY_MATCH_THRESHOLD or entry["PHONE"] == row["PHONE"]:
@@ -160,15 +156,17 @@ with st.form("registration_form"):
                     )
                     st.session_state.confirmed = False
                     st.session_state.entry = None
-                    st.experimental_rerun()
+                    st.stop()
 
-            # Save to Google Sheet
+            # === SAVE TO GOOGLE SHEET ===
             worksheet.append_row(list(entry.values()))
             st.success("✅ Your registration was successful and is pending approval.")
+
+            # Reset session
             st.session_state.confirmed = False
             st.session_state.entry = None
-            st.experimental_rerun()
 
-        elif cancel:
+    with col2:
+        if st.button("❌ Cancel and Edit"):
             st.session_state.confirmed = False
-            st.experimental_rerun()
+            st.session_state.entry = None
