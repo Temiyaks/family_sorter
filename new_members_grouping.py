@@ -3,6 +3,8 @@ import pandas as pd
 import gspread
 from datetime import datetime
 from oauth2client.service_account import ServiceAccountCredentials
+from fpdf import FPDF
+from io import BytesIO
 
 st.set_page_config(page_title="Assign Families", layout="centered")
 
@@ -89,7 +91,7 @@ family_counts = {family: len(master_df[master_df["FAMILY"] == family]) for famil
 
 # Prioritize Family 2
 if PRIORITY_FAMILY in family_counts:
-    family_counts[PRIORITY_FAMILY] = max(0, family_counts[PRIORITY_FAMILY] - 3)
+    family_counts[PRIORITY_FAMILY] = max(0, family_counts[PRIORITY_FAMILY] - 1)
 
 # === ASSIGN MEMBERS ===
 grouped = pending_df.groupby(["GENDER", "AGE_RANGE"])
@@ -98,11 +100,11 @@ assigned_rows = []
 for (gender, age_range), group_df in grouped:
     group_df = group_df.copy()
     group_df.reset_index(drop=True, inplace=True)
-    
+
     for idx in range(len(group_df)):
         sorted_families = sorted(family_counts.items(), key=lambda x: x[1])
         target_family = sorted_families[0][0]
-        
+
         member = group_df.loc[idx]
         assigned_rows.append({
             "NAME": member["NAME"],
@@ -112,8 +114,57 @@ for (gender, age_range), group_df in grouped:
             "FAMILY": target_family,
             "TIMESTAMP": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         })
-        
+
         family_counts[target_family] += 1
+
+# === PDF GENERATOR ===
+def generate_assignment_pdf(assigned_rows):
+    class PDF(FPDF):
+        def header(self):
+            self.set_font('Arial', 'B', 14)
+            self.cell(0, 10, 'CCC Akoka Youth - Family Assignment Summary', 0, 1, 'C')
+            self.ln(5)
+
+        def footer(self):
+            self.set_y(-15)
+            self.set_font('Arial', 'I', 8)
+            self.cell(0, 10, f'Page {self.page_no()}', 0, 0, 'C')
+
+        def add_family_section(self, family, members):
+            self.set_font('Arial', 'B', 12)
+            self.cell(0, 10, family, ln=True)
+            self.set_font('Arial', 'B', 10)
+            self.cell(90, 8, "Name", 1)
+            self.cell(40, 8, "Gender", 1)
+            self.ln()
+
+            self.set_font('Arial', '', 10)
+            for row in members:
+                self.cell(90, 8, row["NAME"], 1)
+                self.cell(40, 8, row["GENDER"], 1)
+                self.ln()
+                if self.get_y() > 270:
+                    self.add_page()
+                    self.cell(90, 8, "Name", 1)
+                    self.cell(40, 8, "Gender", 1)
+                    self.ln()
+
+    df = pd.DataFrame(assigned_rows)
+    grouped = df.groupby("FAMILY")
+
+    pdf = PDF()
+    pdf.set_auto_page_break(auto=True, margin=15)
+    pdf.add_page()
+
+    for family, group_df in grouped:
+        members = group_df.to_dict("records")
+        pdf.add_family_section(family, members)
+        pdf.ln(5)
+
+    pdf_buffer = BytesIO()
+    pdf.output(pdf_buffer)
+    pdf_buffer.seek(0)
+    return pdf_buffer
 
 # === ASSIGNMENT BUTTON ===
 if st.button("✅ Assign Pending to Families"):
@@ -126,3 +177,12 @@ if st.button("✅ Assign Pending to Families"):
 
     st.success(f"✅ {len(assigned_rows)} members have been assigned to families and added to the master sheet.")
     st.info("Old entries in the master have no timestamp. Newly assigned members now include a timestamp.")
+
+    # Generate PDF
+    pdf_file = generate_assignment_pdf(assigned_rows)
+    st.download_button(
+        label="📥 Download Assignment Summary (PDF)",
+        data=pdf_file,
+        file_name="assigned_families.pdf",
+        mime="application/pdf"
+    )
