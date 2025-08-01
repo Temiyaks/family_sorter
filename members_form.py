@@ -23,6 +23,24 @@ st.set_page_config(page_title="Youth Family Form", layout="centered")
 st.image("CCCAkokaLogo.PNG", width=150)
 st.title("📝 Youth Family Form")
 
+
+
+st.markdown("""
+### 👋 Welcome!
+
+To join a family group, please fill out this form **with your correct full name and phone number**.
+
+- Do **not** use nicknames, initials, or alternate spellings.
+- Use a valid phone number that you actively use.
+- Duplicate or suspicious entries may be rejected.
+
+
+Please fill this form **only once** — submitting more than once may delay your assignment to the family
+""")
+
+
+
+
 # === Load Google Service Account Credentials ===
 creds_dict = dict(st.secrets["google_service_account"])
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
@@ -92,13 +110,38 @@ with st.form("registration_form"):
             st.error("Phone number must start with 0 and be exactly 11 digits long (e.g., 08123456789).")
             st.stop()
 
-        entry = {
-            "NAME": name,
-            "GENDER": gender.upper(),
-            "AGE_RANGE": age_range,
-            "PHONE": standardized_phone,
-            "TIMESTAMP": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        }
+        # Show confirmation
+        st.markdown("### ✅ Please confirm your details before final submission:")
+        st.info(f"""
+        **Name:** {name}  
+        **Gender:** {gender}  
+        **Age Range:** {age_range}  
+        **Phone:** {standardized_phone}
+        """)
+
+
+        confirm = st.radio("Are these details correct?", ["Yes, submit", "No, go back"])
+
+        if confirm == "Yes, submit":
+            entry = {
+                "NAME": name,
+                "GENDER": gender.upper(),
+                "AGE_RANGE": age_range,
+                "PHONE": standardized_phone,
+                "TIMESTAMP": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            }
+
+
+
+
+
+        # entry = {
+        #     "NAME": name,
+        #     "GENDER": gender.upper(),
+        #     "AGE_RANGE": age_range,
+        #     "PHONE": standardized_phone,
+        #     "TIMESTAMP": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        # }
 
         # === DUPLICATE CHECKS ===
         FUZZY_MATCH_THRESHOLD = 70
@@ -126,3 +169,7 @@ with st.form("registration_form"):
         # === Save Entry to Pending Sheet ===
         worksheet.append_row(list(entry.values()))
         st.success("✅ Your registration was successful and is pending approval.")
+    
+
+    else:
+        st.warning("Please review and correct your information before submitting.")
