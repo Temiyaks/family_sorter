@@ -4,15 +4,15 @@ from datetime import datetime
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 import json
-from rapidfuzz import fuzz  # 👈 Fuzzy matching for names
+from rapidfuzz import fuzz
 
 # === CONFIGURE FORM ACCESS WINDOW ===
-start_date = datetime(2025, 8, 1)  # 🗓️ Set this to form start date
-access_days = 5                   # ⏳ Number of days form stays open
+start_date = datetime(2025, 8, 1)  # 🗓️ Adjust this start date as needed
+access_days = 5                   # ⏳ Adjust the access window (in days)
 end_date = start_date + pd.Timedelta(days=access_days)
 today = datetime.now()
 
-# === Check Form Access ===
+# === Block access outside allowed dates ===
 if not (start_date <= today <= end_date):
     st.error(f"⛔ The registration form is currently closed.\n\n"
              f"It was open from {start_date.strftime('%b %d')} to {end_date.strftime('%b %d')}.")
@@ -57,11 +57,10 @@ except Exception as e:
     st.warning(f"Could not load pending sheet: {e}")
     pending_df = pd.DataFrame(columns=["NAME", "GENDER", "AGE_RANGE", "PHONE", "TIMESTAMP"])
 
-# Clean up pending_df
 pending_df.rename(columns=lambda x: x.strip().upper(), inplace=True)
 pending_df["PHONE"] = pending_df["PHONE"].astype(str).apply(lambda x: "0" + x[-10:] if len(x) >= 10 else x)
 
-# === FORM UI ===
+# === STREAMLIT FORM ===
 with st.form("registration_form"):
     name = st.text_input("Full Name").strip().title()
     gender = st.selectbox("Gender", ["MALE", "FEMALE"])
@@ -100,11 +99,16 @@ with st.form("registration_form"):
             "TIMESTAMP": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         }
 
-        # === DUPLICATE CHECKS ===
-        FUZZY_MATCH_THRESHOLD = 85
+        # === DUPLICATE CHECKS (STRONGER MATCHING) ===
+        FUZZY_MATCH_THRESHOLD = 70  # lowered for broader matching
 
-        # Check against Master (already assigned)
+        # --- Check against Master Sheet ---
         for _, row in master_df.iterrows():
+            if name.lower() in row["NAME"].lower() or row["NAME"].lower() in name.lower():
+                st.warning(
+                    f"⚠️ A similar name exists: {row['NAME']} (Phone: {row['PHONE']}). Please use your full legal name."
+                )
+                st.stop()
             name_score = fuzz.token_sort_ratio(name, row["NAME"])
             if name_score >= FUZZY_MATCH_THRESHOLD or standardized_phone == row["PHONE"]:
                 st.error(
@@ -113,8 +117,14 @@ with st.form("registration_form"):
                 )
                 st.stop()
 
-        # Check against Pending (waiting)
+        # --- Check against Pending Sheet ---
         for _, row in pending_df.iterrows():
+            if name.lower() in row["NAME"].lower() or row["NAME"].lower() in name.lower():
+                st.warning(
+                    f"⏳ A similar name already exists in pending list: {row['NAME']} (Phone: {row['PHONE']}) "
+                    f"submitted on {row['TIMESTAMP']}.\n\nPlease wait to be assigned."
+                )
+                st.stop()
             name_score = fuzz.token_sort_ratio(name, row["NAME"])
             if name_score >= FUZZY_MATCH_THRESHOLD or standardized_phone == row["PHONE"]:
                 st.warning(
