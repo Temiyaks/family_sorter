@@ -118,53 +118,6 @@ for (gender, age_range), group_df in grouped:
 
         family_counts[target_family] += 1
 
-# === PDF GENERATION FUNCTION ===
-def generate_assignment_pdf(assigned_rows):
-    class PDF(FPDF):
-        def header(self):
-            self.set_font('Arial', 'B', 14)
-            self.cell(0, 10, 'CCC Akoka Youth - Family Assignment Summary', 0, 1, 'C')
-            self.ln(5)
-
-        def footer(self):
-            self.set_y(-15)
-            self.set_font('Arial', 'I', 8)
-            self.cell(0, 10, f'Page {self.page_no()}', 0, 0, 'C')
-
-        def add_family_section(self, family, members):
-            self.set_font('Arial', 'B', 12)
-            self.cell(0, 10, family, ln=True)
-            self.set_font('Arial', 'B', 10)
-            self.cell(90, 8, "Name", 1)
-            self.cell(40, 8, "Gender", 1)
-            self.ln()
-
-            self.set_font('Arial', '', 10)
-            for row in members:
-                self.cell(90, 8, row["NAME"], 1)
-                self.cell(40, 8, row["GENDER"], 1)
-                self.ln()
-                if self.get_y() > 270:
-                    self.add_page()
-                    self.cell(90, 8, "Name", 1)
-                    self.cell(40, 8, "Gender", 1)
-                    self.ln()
-
-    df = pd.DataFrame(assigned_rows)
-    grouped = df.groupby("FAMILY")
-
-    pdf = PDF()
-    pdf.set_auto_page_break(auto=True, margin=15)
-    pdf.add_page()
-
-    for family, group_df in grouped:
-        members = group_df.to_dict("records")
-        pdf.add_family_section(family, members)
-        pdf.ln(5)
-
-    pdf_data = pdf.output(dest='S').encode('latin-1')
-    return BytesIO(pdf_data)
-
 # === ASSIGN BUTTON ===
 if st.button("✅ Assign Pending to Families"):
     # Write to master sheet
@@ -177,13 +130,4 @@ if st.button("✅ Assign Pending to Families"):
 
     st.success(f"✅ {len(assigned_rows)} members assigned and added to the master sheet.")
 
-    # Generate PDF for assigned rows
-    pdf_file = generate_assignment_pdf(assigned_rows)
 
-    # Show download button for PDF
-    st.download_button(
-        label="📥 Download Assignment Summary (PDF)",
-        data=pdf_file,
-        file_name="assigned_families.pdf",
-        mime="application/pdf"
-    )
