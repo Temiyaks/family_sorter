@@ -91,7 +91,7 @@ family_counts = {family: len(master_df[master_df["FAMILY"] == family]) for famil
 
 # Prioritize Family 2 by subtracting 3 to give "priority"
 if PRIORITY_FAMILY in family_counts:
-    family_counts[PRIORITY_FAMILY] = max(0, family_counts[PRIORITY_FAMILY] - 3)
+    family_counts[PRIORITY_FAMILY] = max(0, family_counts[PRIORITY_FAMILY] - 2)
 
 # === ASSIGN MEMBERS ===
 grouped = pending_df.groupby(["GENDER", "AGE_RANGE"])
