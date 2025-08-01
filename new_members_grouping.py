@@ -89,9 +89,9 @@ if "FAMILY" not in master_df.columns:
 family_list = master_df["FAMILY"].dropna().unique().tolist()
 family_counts = {family: len(master_df[master_df["FAMILY"] == family]) for family in family_list}
 
-# Prioritize Family 2
+# Prioritize Family 2 by subtracting 3 to give "priority"
 if PRIORITY_FAMILY in family_counts:
-    family_counts[PRIORITY_FAMILY] = max(0, family_counts[PRIORITY_FAMILY] - 1)
+    family_counts[PRIORITY_FAMILY] = max(0, family_counts[PRIORITY_FAMILY] - 3)
 
 # === ASSIGN MEMBERS ===
 grouped = pending_df.groupby(["GENDER", "AGE_RANGE"])
@@ -102,6 +102,7 @@ for (gender, age_range), group_df in grouped:
     group_df.reset_index(drop=True, inplace=True)
 
     for idx in range(len(group_df)):
+        # Sort families by current count to assign to smallest family
         sorted_families = sorted(family_counts.items(), key=lambda x: x[1])
         target_family = sorted_families[0][0]
 
@@ -117,7 +118,7 @@ for (gender, age_range), group_df in grouped:
 
         family_counts[target_family] += 1
 
-# === PDF GENERATOR ===
+# === PDF GENERATION FUNCTION ===
 def generate_assignment_pdf(assigned_rows):
     class PDF(FPDF):
         def header(self):
@@ -161,25 +162,25 @@ def generate_assignment_pdf(assigned_rows):
         pdf.add_family_section(family, members)
         pdf.ln(5)
 
-    pdf_buffer = BytesIO()
-    pdf.output(pdf_buffer)
-    pdf_buffer.seek(0)
-    return pdf_buffer
+    pdf_data = pdf.output(dest='S').encode('latin-1')
+    return BytesIO(pdf_data)
 
-# === ASSIGNMENT BUTTON ===
+# === ASSIGN BUTTON ===
 if st.button("✅ Assign Pending to Families"):
+    # Write to master sheet
     for row in assigned_rows:
         master_ws.append_row(list(row.values()))
 
-    # Reset Pending Sheet
+    # Clear pending sheet and reset headers
     pending_ws.clear()
     pending_ws.append_row(["NAME", "GENDER", "AGE_RANGE", "PHONE", "TIMESTAMP"])
 
-    st.success(f"✅ {len(assigned_rows)} members have been assigned to families and added to the master sheet.")
-    st.info("Old entries in the master have no timestamp. Newly assigned members now include a timestamp.")
+    st.success(f"✅ {len(assigned_rows)} members assigned and added to the master sheet.")
 
-    # Generate PDF
+    # Generate PDF for assigned rows
     pdf_file = generate_assignment_pdf(assigned_rows)
+
+    # Show download button for PDF
     st.download_button(
         label="📥 Download Assignment Summary (PDF)",
         data=pdf_file,
