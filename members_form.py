@@ -12,7 +12,7 @@ from rapidfuzz import fuzz  # 👈 Fuzzy matching for names
 
 # === CONFIGURE FORM ACCESS WINDOW ===
 start_date = datetime(2025, 8, 1)  # 🗓️ Set this to form start date
-access_days = 20                   # ⏳ Number of days form stays open
+access_days = 5                  # ⏳ Number of days form stays open
 end_date = start_date + pd.Timedelta(days=access_days)
 today = datetime.now()
 
@@ -26,6 +26,9 @@ if not (start_date <= today <= end_date):
 st.set_page_config(page_title="Youth Family Form", layout="centered")
 st.image("CCCAkokaLogo.PNG", width=150)
 st.title("📝 Youth Family Form")
+
+st.info(f"🗓️ This form will remain open until **{end_date.strftime('%B %d, %Y')}**.")
+
 
 
 
@@ -135,12 +138,14 @@ with st.form("registration_form"):
         for _, row in pending_df.iterrows():
             name_score = fuzz.token_sort_ratio(name, row["NAME"])
             if name_score >= FUZZY_MATCH_THRESHOLD or standardized_phone == row["PHONE"]:
-                st.warning(
-                    f"⏳ A similar submission already exists: {row['NAME']} (Phone: {row['PHONE']}) "
-                    f"submitted on {row['TIMESTAMP']}.\n\nPlease wait to be assigned."
-                )
+                
+                st.warning(f"⏳ A similar submission was found: {row['NAME']} (Phone: {row['PHONE']}).\n\n"
+                    "You may already be in the queue. Please wait to be assigned to family, and avoid submitting multiple times."
+                        )
+
                 st.stop()
 
         # === Save Entry to Pending Sheet ===
         worksheet.append_row(list(entry.values()))
-        st.success("✅ Your registration was successful and is pending approval.")
+        st.success("✅ Your registration was successful and is pending approval.\n\n🕒 Submitted on: " + entry["TIMESTAMP"])
+
