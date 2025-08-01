@@ -12,12 +12,12 @@ PASSWORD = "cccakoka2025"
 SHEET_NAME = "Youth Family Assignment"
 MASTER_WS = "Master"
 PENDING_WS = "Pending"
+PRIORITY_FAMILY = "Family 2"
 
-# Initialize session state for authentication if not set
+# === AUTHENTICATION ===
 if 'authenticated' not in st.session_state:
     st.session_state.authenticated = False
 
-# === LOGIN FORM ===
 if not st.session_state.authenticated:
     with st.form("login_form"):
         st.title("Assign new members to Families")
@@ -31,28 +31,29 @@ if not st.session_state.authenticated:
             st.session_state.authenticated = True
         else:
             st.error("❌ Invalid username or password.")
-    st.stop()  # Stop here if not authenticated
+    st.stop()
 
-# === MAIN APP STARTS HERE ===
+# === MAIN APP ===
 st.title("Assign new members to Families")
 st.success("✅ Logged in successfully!")
 
 st.markdown("""
-###  Welcome to the Family Grouping Page
+### Welcome to the Family Grouping Page
 
 This tool helps us assign new youth members to one of our existing family groups.
 
 How it works:
 - We take the list of pending members who have registered.
-- Based on their gender, **age range, and current family sizes,
-- They are evenly distributed into existing families.
+- Based on their **gender**, **age range**, and current **family sizes**,  
+  they are evenly distributed into existing families.
+- ✅ Priority is currently given to **Family 2** to receive 3 more members.
 
-🧾 Once assigned, new members are automatically moved to the Master Sheet and tagged with a timestamp so we can always tell who was recently added.
+🧾 Once assigned, new members are automatically moved to the Master Sheet and tagged with a timestamp.
 
 Ready to create new connections? Hit the button below to get started!
 """)
 
-# === Google Sheets Authentication ===
+# === GOOGLE SHEETS SETUP ===
 creds_dict = dict(st.secrets["google_service_account"])
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
 creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
@@ -66,56 +67,63 @@ except Exception as e:
     st.error(f"Could not open sheet: {e}")
     st.stop()
 
-# Load Master Data
+# === LOAD DATA ===
 master_df = pd.DataFrame(master_ws.get_all_records())
 if not master_df.empty:
     master_df.rename(columns=lambda x: x.strip().upper(), inplace=True)
 else:
     master_df = pd.DataFrame(columns=["NAME", "GENDER", "AGE_RANGE", "PHONE", "FAMILY"])
 
-# Load Pending Data
 pending_df = pd.DataFrame(pending_ws.get_all_records())
 if pending_df.empty:
     st.success("✅ No pending entries to assign.")
     st.stop()
 pending_df.rename(columns=lambda x: x.strip().upper(), inplace=True)
 
-# Check for FAMILY column
 if "FAMILY" not in master_df.columns:
     st.error("Master data must contain 'FAMILY' column.")
     st.stop()
 
-# Determine family counts
+# === FAMILY COUNTS (with priority adjustment) ===
 family_list = master_df["FAMILY"].dropna().unique().tolist()
 family_counts = {family: len(master_df[master_df["FAMILY"] == family]) for family in family_list}
 
-# Assign new members
-assigned_rows = []
-for idx, row in pending_df.iterrows():
-    gender = row["GENDER"]
-    age_range = row["AGE_RANGE"]
-    
-    # Find family with the smallest count
-    target_family = min(family_counts, key=family_counts.get)
-    family_counts[target_family] += 1  # update count
-    
-    assigned_rows.append({
-        "NAME": row["NAME"],
-        "GENDER": gender,
-        "AGE_RANGE": age_range,
-        "PHONE": str(row["PHONE"]),
-        "FAMILY": target_family,
-        "TIMESTAMP": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    })
+# Prioritize Family 2
+if PRIORITY_FAMILY in family_counts:
+    family_counts[PRIORITY_FAMILY] = max(0, family_counts[PRIORITY_FAMILY] - 3)
 
-# Button to assign pending members
+# === ASSIGN MEMBERS ===
+grouped = pending_df.groupby(["GENDER", "AGE_RANGE"])
+assigned_rows = []
+
+for (gender, age_range), group_df in grouped:
+    group_df = group_df.copy()
+    group_df.reset_index(drop=True, inplace=True)
+    
+    for idx in range(len(group_df)):
+        sorted_families = sorted(family_counts.items(), key=lambda x: x[1])
+        target_family = sorted_families[0][0]
+        
+        member = group_df.loc[idx]
+        assigned_rows.append({
+            "NAME": member["NAME"],
+            "GENDER": gender,
+            "AGE_RANGE": age_range,
+            "PHONE": str(member["PHONE"]),
+            "FAMILY": target_family,
+            "TIMESTAMP": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        })
+        
+        family_counts[target_family] += 1
+
+# === ASSIGNMENT BUTTON ===
 if st.button("✅ Assign Pending to Families"):
     for row in assigned_rows:
         master_ws.append_row(list(row.values()))
-    
-    # Clear Pending worksheet and reset header row
+
+    # Reset Pending Sheet
     pending_ws.clear()
     pending_ws.append_row(["NAME", "GENDER", "AGE_RANGE", "PHONE", "TIMESTAMP"])
-    
+
     st.success(f"✅ {len(assigned_rows)} members have been assigned to families and added to the master sheet.")
     st.info("Old entries in the master have no timestamp. Newly assigned members now include a timestamp.")
