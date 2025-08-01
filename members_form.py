@@ -134,7 +134,7 @@ if st.session_state.confirmed and st.session_state.entry:
     col1, col2 = st.columns(2)
     with col1:
         if st.button("✅ Confirm and Submit"):
-            FUZZY_MATCH_THRESHOLD = 70
+            FUZZY_MATCH_THRESHOLD = 85
 
             # Check against Master
             for _, row in master_df.iterrows():
