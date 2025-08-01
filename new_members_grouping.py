@@ -46,7 +46,6 @@ How it works:
 - We take the list of pending members who have registered.
 - Based on their **gender**, **age range**, and current **family sizes**,  
   they are evenly distributed into existing families.
-- ✅ Priority is currently given to **Family 2** to receive 3 more members.
 
 🧾 Once assigned, new members are automatically moved to the Master Sheet and tagged with a timestamp.
 
