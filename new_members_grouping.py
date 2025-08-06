@@ -14,7 +14,9 @@ PASSWORD = "cccakoka2025"
 SHEET_NAME = "Youth Family Assignment"
 MASTER_WS = "Master"
 PENDING_WS = "Pending"
-PRIORITY_FAMILY = "Family 2"
+# PRIORITY_FAMILY = "Family 2"
+PRIORITY_FAMILY = "Cornerstone Family"
+
 
 # === AUTHENTICATION ===
 if 'authenticated' not in st.session_state:
