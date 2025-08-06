@@ -12,7 +12,7 @@ from rapidfuzz import fuzz  # 👈 Fuzzy matching for names
 
 # === CONFIGURE FORM ACCESS WINDOW ===
 start_date = datetime(2025, 8, 1)  # 🗓️ Set this to form start date
-access_days = 5              # ⏳ Number of days form stays open
+access_days = 6              # ⏳ Number of days form stays open
 end_date = start_date + pd.Timedelta(days=access_days)
 today = datetime.now()
 
