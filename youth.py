@@ -1,201 +1,157 @@
 import streamlit as st
 import pandas as pd
-import re
 import random
 from collections import Counter
 from fpdf import FPDF
 import matplotlib.pyplot as plt
 
-# 👇 Show the logo
-st.image("CCCAkokaLogo.PNG", width=150)
-
 # ---- PAGE SETUP ----
+
 st.set_page_config(page_title="Family Restructuring", layout="wide")
 
+# ---- LOGO ----
+
+st.image("CCCAkokaLogo.PNG", width=150)
+
 # ---- TITLE ----
+
 st.title("CCC Akoka Youth Family Restructuring Platform")
 st.markdown("""
-Welcome to the **Family Balancer Tool**  
-Upload your member data as a CSV file. The system will sort members into **5 balanced families** based on:
-- Age range
-- Gender
-- Activity level
+Upload your CSV file with:
 
-Let's get started!
-""")
+* NAME
+* AGE
+* GENDER
+
+The system will balance members into **5 families** based on:
+
+* Gender
+* Age
+  """)
 
 # ---- FILE UPLOAD ----
-uploaded_file = st.file_uploader(" Upload Member CSV File", type="csv")
+
+uploaded_file = st.file_uploader("Upload Member CSV File", type="csv")
 
 # ---- HELPERS ----
-@st.cache_data
-def age_range_key(age_str):
-    if not isinstance(age_str, str):
-        return 9999
-    match = re.match(r'(\d+)', age_str)
-    if match:
-        return int(match.group(1))
-    return 9999
 
 def get_stats(df):
-    stats = {}
-    stats['Gender Distribution'] = df['GENDER'].value_counts().to_frame('Count')
-    stats['Activity by Gender'] = df.groupby(['GENDER', 'ACTIVITY']).size().unstack(fill_value=0)
-    stats['Age Range Distribution'] = df['AGE_RANGE'].value_counts().sort_index().to_frame('Count')
-    stats['Age Range by Gender'] = df.groupby(['GENDER', 'AGE_RANGE']).size().unstack(fill_value=0).sort_index(axis=1)
+stats = {}
+stats['Gender Distribution'] = df['GENDER'].value_counts().to_frame('Count')
+stats['Age Distribution'] = df['AGE'].value_counts().sort_index().to_frame('Count')
+stats['Age by Gender'] = df.groupby(['GENDER', 'AGE']).size().unstack(fill_value=0)
 
-    if 'Family' in df.columns:
-        stats['Family Sizes'] = df['Family'].value_counts().to_frame('Count')
-        stats['Gender by Family'] = df.groupby(['Family', 'GENDER']).size().unstack(fill_value=0)
-        stats['Activity by Family'] = df.groupby(['Family', 'ACTIVITY']).size().unstack(fill_value=0)
-        stats['Age Range by Family'] = df.groupby(['Family', 'AGE_RANGE']).size().unstack(fill_value=0).sort_index(axis=1)
-    return stats
+```
+if 'Family' in df.columns:
+    stats['Family Sizes'] = df['Family'].value_counts().to_frame('Count')
+    stats['Gender by Family'] = df.groupby(['Family', 'GENDER']).size().unstack(fill_value=0)
+    stats['Age by Family'] = df.groupby(['Family', 'AGE']).size().unstack(fill_value=0)
 
-def convert_df(df):
-    return df.to_csv(index=False).encode('utf-8')
+return stats
+```
 
 def create_family_pdf(dataframe, save_path):
-    class PDF(FPDF):
-        def header(self):
-            self.set_font('Arial', 'B', 12)
-            self.cell(0, 10, 'CCC Akoka Youth Family Groups', 0, 1, 'C')
-            self.ln(5)
+class PDF(FPDF):
+def header(self):
+self.set_font('Arial', 'B', 12)
+self.cell(0, 10, 'CCC Akoka Youth Family Groups', 0, 1, 'C')
+self.ln(5)
 
-    pdf = PDF()
-    families = dataframe['Family'].unique()
-    families.sort()
+```
+pdf = PDF()
+families = sorted(dataframe['Family'].unique())
 
-    for fam in families:
-        pdf.add_page()
-        pdf.set_font('Arial', 'B', 14)
-        pdf.cell(0, 10, f'{fam}', ln=True)
+for fam in families:
+    pdf.add_page()
+    pdf.set_font('Arial', 'B', 14)
+    pdf.cell(0, 10, f'{fam}', ln=True)
 
-        pdf.set_font('Arial', 'B', 10)
-        pdf.cell(60, 10, 'Name', 1)
-        pdf.cell(40, 10, 'Gender', 1)
+    pdf.set_font('Arial', 'B', 10)
+    pdf.cell(80, 10, 'Name', 1)
+    pdf.cell(40, 10, 'Gender', 1)
+    pdf.cell(30, 10, 'Age', 1)
+    pdf.ln()
+
+    members = dataframe[dataframe['Family'] == fam]
+    for _, row in members.iterrows():
+        pdf.set_font('Arial', '', 10)
+        pdf.cell(80, 10, str(row['NAME']), 1)
+        pdf.cell(40, 10, str(row['GENDER']), 1)
+        pdf.cell(30, 10, str(row['AGE']), 1)
         pdf.ln()
 
-        members = dataframe[dataframe['Family'] == fam]
-        for _, row in members.iterrows():
-            pdf.set_font('Arial', '', 10)
-            pdf.cell(60, 10, str(row['NAME']), 1)
-            pdf.cell(40, 10, str(row['GENDER']), 1)
-            pdf.ln()
+pdf.output(save_path)
+```
 
-    pdf.output(save_path)
+# ---- MAIN ----
 
-# ---- MAIN LOGIC ----
 if uploaded_file:
-    df = pd.read_csv(uploaded_file, dtype={'PHONE': str})
-    # 👉 Add this shuffle line after cleaning and before family assignment
-    df = df.sample(frac=1, random_state=None).reset_index(drop=True)
+df = pd.read_csv(uploaded_file)
 
-    with st.spinner("🔄 Processing and assigning families..."):
-        inactive_mask = df['ACTIVITY'].str.upper() == 'INACTIVE'
-        df.loc[inactive_mask, 'GENDER'] = df.loc[inactive_mask, 'GENDER'].fillna('UNKNOWN').str.upper()
-        df.loc[inactive_mask, 'AGE_RANGE'] = df.loc[inactive_mask, 'AGE_RANGE'].fillna('UNKNOWN')
+```
+# ---- CLEAN DATA ----
+df['NAME'] = df['NAME'].fillna('Unknown')
+df['GENDER'] = df['GENDER'].fillna('UNKNOWN').str.upper()
+df['AGE'] = pd.to_numeric(df['AGE'], errors='coerce')
 
-        df['GENDER'] = df['GENDER'].str.upper()
-        df['NAME'] = df['NAME'].combine_first(df.index.to_series().apply(lambda i: f"Unknown_{i}"))
+df = df.dropna(subset=['AGE'])
 
-        df = df.dropna(subset=['AGE_RANGE'])
-        unique_age_ranges = sorted(df['AGE_RANGE'].unique(), key=age_range_key)
-        if 'UNKNOWN' not in unique_age_ranges:
-            unique_age_ranges.append('UNKNOWN')
-        df['AGE_RANGE'] = pd.Categorical(df['AGE_RANGE'], categories=unique_age_ranges, ordered=True)
+# Shuffle dataset
+df = df.sample(frac=1).reset_index(drop=True)
 
-        stats_before = get_stats(df)
+stats_before = get_stats(df)
 
-        # FAMILY ASSIGNMENT
-        num_families = 5
-        df['Family'] = None
-        all_activity_types = df['ACTIVITY'].dropna().unique().tolist()
-        grouped = df.groupby(['GENDER', 'AGE_RANGE', 'ACTIVITY'])
+# ---- FAMILY ASSIGNMENT ----
+num_families = 5
+df['Family'] = None
 
-        family_sizes = Counter({f'Family {i}': 0 for i in range(1, num_families + 1)})
-        activity_count = {
-            f'Family {i}': {atype: 0 for atype in all_activity_types}
-            for i in range(1, num_families + 1)
-        }
+families = [f'Family {i}' for i in range(1, num_families + 1)]
 
-        total_members = len(df)
-        base_size = total_members // num_families
-        max_size = base_size + (1 if total_members % num_families != 0 else 0)
+# Group by Gender + Age
+grouped = df.groupby(['GENDER', 'AGE'])
 
-        def pick_family(family_sizes, activity_count, activity_type):
-            min_size = min(family_sizes.values())
-            candidates = [fam for fam, size in family_sizes.items() if size < max_size and size == min_size]
-            if not candidates:
-                candidates = sorted(family_sizes, key=lambda f: family_sizes[f])
-            candidates = sorted(candidates, key=lambda fam: activity_count[fam].get(activity_type, 0))
-            return random.choice(candidates)
+for _, group_df in grouped:
+    group_df = group_df.sample(frac=1)
 
-        for group_keys, group_df in grouped:
-            gender, age_range, activity = group_keys
-            indices = group_df.sample(frac=1, random_state=None).index.tolist()  # Randomize
-            for i in range(len(indices)):
-                fam = pick_family(family_sizes, activity_count, activity)
-                df.at[indices[i], 'Family'] = fam
-                family_sizes[fam] += 1
-                activity_count[fam][activity] += 1
+    # Split evenly across families
+    split_indices = [group_df.iloc[i::num_families].index for i in range(num_families)]
 
-        df['AGE_RANGE'] = pd.Categorical(df['AGE_RANGE'], categories=unique_age_ranges, ordered=True)
+    for fam, indices in zip(families, split_indices):
+        df.loc[indices, 'Family'] = fam
 
-        stats_after = get_stats(df)
+stats_after = get_stats(df)
 
+# ---- SAVE FILES ----
+csv_path = "grouped_families.csv"
+pdf_path = "grouped_families.pdf"
 
-        
+df.to_csv(csv_path, index=False)
+create_family_pdf(df, pdf_path)
 
+# ---- DISPLAY ----
+st.subheader("📊 Statistics Before Grouping")
+for title, stat_df in stats_before.items():
+    st.markdown(f"**{title}**")
+    st.dataframe(stat_df)
 
+st.subheader("📈 Statistics After Grouping")
 
-        # Save CSV and PDF to temporary local paths
-        full_csv_path = "grouped_full.csv"
-        pdf_path = "grouped_printable.pdf"
+# Bar chart
+st.subheader("🏠 Family Sizes")
+fig, ax = plt.subplots()
+stats_after['Family Sizes'].plot(kind='bar', ax=ax, legend=False)
+st.pyplot(fig)
 
-        df.to_csv(full_csv_path, index=False)
-        printable_df = df[['NAME', 'GENDER', 'Family']]
-        create_family_pdf(printable_df, pdf_path)
+for title, stat_df in stats_after.items():
+    st.markdown(f"**{title}**")
+    st.dataframe(stat_df)
 
-    # ---- STATISTICS BEFORE GROUPING ----
-    st.subheader("📊 View Statistics Before Grouping")
-    for title, stat_df in stats_before.items():
-        st.markdown(f"**{title}**")
-        st.dataframe(stat_df)
+# ---- DOWNLOADS ----
+with open(csv_path, "rb") as f:
+    st.download_button("⬇️ Download CSV", f, file_name="SUNDAY_SCHOOL_grouped_families.csv")
 
-    # ---- CSV DOWNLOAD ----
-    with open(full_csv_path, "rb") as f_csv:
-        st.download_button("⬇️ Download Grouped CSV", f_csv, file_name="grouped_families.csv", mime="text/csv")
+# with open(pdf_path, "rb") as f:
+#     st.download_button("⬇️ Download PDF", f, file_name="grouped_families.pdf")
 
-    # ---- STATISTICS AFTER GROUPING ----
-    st.subheader("📈 View Statistics After Grouping")
-
-    # ---- FAMILY SIZE BAR CHART ----
-    st.subheader("🏠 Family Sizes Bar Chart")
-
-    family_sizes = stats_after['Family Sizes']
-    fig, ax = plt.subplots()
-    family_sizes.plot(kind='bar', legend=False, ax=ax, color='skyblue')
-    ax.set_title("Number of Members per Family")
-    ax.set_ylabel("Number of Members")
-    ax.set_xlabel("Family")
-    st.pyplot(fig)
-
-
-
-
-    for title, stat_df in stats_after.items():
-        st.markdown(f"**{title}**")
-        st.dataframe(stat_df)
-
-    # ---- PDF DOWNLOAD & INSTRUCTION ----
-    st.subheader("🖨️ Download PDF to View & Print")
-    with open(pdf_path, "rb") as f_pdf:
-        st.download_button(
-            label="⬇️ Download PDF Report",
-            data=f_pdf,
-            file_name="grouped_families.pdf",
-            mime="application/pdf"
-        )
-    st.markdown("👉 After downloading, open the PDF directly from your browser's downloads bar and press **Ctrl+P** to print.")
-
-    st.success("✅ Family assignment completed!")
+st.success("✅ Families successfully balanced!")
+```
