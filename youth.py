@@ -89,23 +89,42 @@ if uploaded_file is not None:
 
     stats_before = get_stats(df)
 
-    # ---- FAMILY ASSIGNMENT ----
-    num_families = 5
-    df['Family'] = None
+    # ---- FAMILY ASSIGNMENT (FIXED) ----
+num_families = 5
+df['Family'] = None
 
-    families = ['Family ' + str(i) for i in range(1, num_families + 1)]
+families = ['Family ' + str(i) for i in range(1, num_families + 1)]
 
-    grouped = df.groupby(['GENDER', 'AGE'])
+# Track sizes
+family_sizes = {fam: 0 for fam in families}
 
-    for _, group_df in grouped:
-        group_df = group_df.sample(frac=1)
+# Ideal size
+total = len(df)
+base_size = total // num_families
+extra = total % num_families
 
-        split_indices = [group_df.iloc[i::num_families].index for i in range(num_families)]
+max_sizes = {}
+for i, fam in enumerate(families):
+    if i < extra:
+        max_sizes[fam] = base_size + 1
+    else:
+        max_sizes[fam] = base_size
 
-        for fam, indices in zip(families, split_indices):
-            df.loc[indices, 'Family'] = fam
+# Group by Gender + Age
+grouped = df.groupby(['GENDER', 'AGE'])
 
-    stats_after = get_stats(df)
+for _, group_df in grouped:
+    group_df = group_df.sample(frac=1)
+
+    for idx in group_df.index:
+        # Pick family with smallest size that is not full
+        valid_families = [f for f in families if family_sizes[f] < max_sizes[f]]
+        valid_families.sort(key=lambda f: family_sizes[f])
+
+        chosen_family = valid_families[0]
+
+        df.at[idx, 'Family'] = chosen_family
+        family_sizes[chosen_family] += 1
 
     # ---- SAVE FILES ----
     csv_path = "grouped_families.csv"
