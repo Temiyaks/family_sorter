@@ -17,14 +17,14 @@ Upload your CSV file with:
 - AGE
 - GENDER
 
-The system will balance members into 5 families based on:
-- Gender
-- Age
+The system balances members into 5 families based on:
+- Equal family size (STRICT)
+- Gender distribution
+- Age distribution
 """)
 
 # ---- FILE UPLOAD ----
 uploaded_file = st.file_uploader("Upload Member CSV File", type="csv")
-
 
 # ---- HELPERS ----
 def get_stats(df):
@@ -89,42 +89,45 @@ if uploaded_file is not None:
 
     stats_before = get_stats(df)
 
-    # ---- FAMILY ASSIGNMENT (FIXED) ----
-num_families = 5
-df['Family'] = None
+    # ---- FAMILY ASSIGNMENT (FIXED LOGIC) ----
+    num_families = 5
+    df['Family'] = None
 
-families = ['Family ' + str(i) for i in range(1, num_families + 1)]
+    families = ['Family ' + str(i) for i in range(1, num_families + 1)]
 
-# Track sizes
-family_sizes = {fam: 0 for fam in families}
+    # Track family sizes
+    family_sizes = {fam: 0 for fam in families}
 
-# Ideal size
-total = len(df)
-base_size = total // num_families
-extra = total % num_families
+    # Ideal sizes
+    total = len(df)
+    base_size = total // num_families
+    extra = total % num_families
 
-max_sizes = {}
-for i, fam in enumerate(families):
-    if i < extra:
-        max_sizes[fam] = base_size + 1
-    else:
-        max_sizes[fam] = base_size
+    max_sizes = {}
+    for i, fam in enumerate(families):
+        if i < extra:
+            max_sizes[fam] = base_size + 1
+        else:
+            max_sizes[fam] = base_size
 
-# Group by Gender + Age
-grouped = df.groupby(['GENDER', 'AGE'])
+    # Group by Gender + Age
+    grouped = df.groupby(['GENDER', 'AGE'])
 
-for _, group_df in grouped:
-    group_df = group_df.sample(frac=1)
+    for _, group_df in grouped:
+        group_df = group_df.sample(frac=1)
 
-    for idx in group_df.index:
-        # Pick family with smallest size that is not full
-        valid_families = [f for f in families if family_sizes[f] < max_sizes[f]]
-        valid_families.sort(key=lambda f: family_sizes[f])
+        for idx in group_df.index:
+            # Only choose families that are not full
+            valid_families = [f for f in families if family_sizes[f] < max_sizes[f]]
 
-        chosen_family = valid_families[0]
+            # Pick the smallest family
+            valid_families.sort(key=lambda f: family_sizes[f])
+            chosen_family = valid_families[0]
 
-        df.at[idx, 'Family'] = chosen_family
-        family_sizes[chosen_family] += 1
+            df.at[idx, 'Family'] = chosen_family
+            family_sizes[chosen_family] += 1
+
+    stats_after = get_stats(df)
 
     # ---- SAVE FILES ----
     csv_path = "grouped_families.csv"
@@ -154,7 +157,7 @@ for _, group_df in grouped:
     with open(csv_path, "rb") as f:
         st.download_button("Download CSV", f, file_name="grouped_families.csv")
 
-    # with open(pdf_path, "rb") as f:
-    #     st.download_button("Download PDF", f, file_name="grouped_families.pdf")
+    with open(pdf_path, "rb") as f:
+        st.download_button("Download PDF", f, file_name="grouped_families.pdf")
 
     st.success("Families successfully balanced!")
