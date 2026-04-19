@@ -155,9 +155,9 @@ if uploaded_file is not None:
 
     # ---- DOWNLOADS ----
     with open(csv_path, "rb") as f:
-        st.download_button("Download CSV", f, file_name="grouped_families.csv")
+        st.download_button("Download CSV", f, file_name="SUNDAY_SCHOOL_families.csv")
 
-    with open(pdf_path, "rb") as f:
-        st.download_button("Download PDF", f, file_name="grouped_families.pdf")
+    # with open(pdf_path, "rb") as f:
+    #     st.download_button("Download PDF", f, file_name="grouped_families.pdf")
 
     st.success("Families successfully balanced!")
